@@ -1,0 +1,33 @@
+{
+  "slug": "timer-callback",
+  "order": 3,
+  "title": "Timer 的 callback，為什麼不能慢慢等？",
+  "category": "Timer",
+  "minutes": 4,
+  "updated": "2026-11-13",
+  "summary": "callback 是時間到後要做的事。它在共用的 timer service task 裡執行，不能把這個 Task 卡住。",
+  "one_sentence": "軟體 Timer 的 callback 要短、要快，而且不能進入 Blocked，因為其他 Timer 也要使用同一個 timer service task。",
+  "steps": [
+    {"title": "先建立 Timer", "text": "xTimerCreate() 設定週期、是否重複，以及時間到後呼叫的函式；建立成功不代表已經開始計時。"},
+    {"title": "送出啟動命令", "text": "xTimerStart() 把命令送進 timer command queue。回傳 pdPASS 代表命令已成功送入。"},
+    {"title": "由 timer service task 處理", "text": "計時到期且服務 Task 得以執行時，呼叫 callback；實際執行時機仍受排程影響。"},
+    {"title": "快速完成並返回", "text": "callback 做少量工作後就返回。耗時處理應交給其他 Task，讓服務 Task 繼續處理 Timer。"}
+  ],
+  "code": "#include <stdint.h>\n#include \"FreeRTOS.h\"\n#include \"timers.h\"\n\nextern void handle_init_error(void);\n\n/* 此計數器只由 timer service task 修改。 */\nstatic uint32_t callback_count = 0;\n\nstatic void on_timeout(TimerHandle_t timer)\n{\n    (void) timer;\n    callback_count++;\n    /* 不呼叫 vTaskDelay()，做完就返回。 */\n}\n\n/* 初始化片段：於排程器啟動前執行。 */\nvoid init_timer(void)\n{\n    TimerHandle_t timer = xTimerCreate(\n        \"sample\", pdMS_TO_TICKS(1000),\n        pdTRUE, NULL, on_timeout);\n\n    if (timer == NULL) {\n        handle_init_error();\n        return;\n    }\n    if (xTimerStart(timer, 0) != pdPASS) {\n        handle_init_error();\n    }\n}",
+  "code_note": "教學片段，handle_init_error() 須由應用程式宣告與提供，並負責停止初始化或進行復原。需啟用 configUSE_TIMERS、動態配置，設定 timer task 的優先權／堆疊／命令佇列容量並加入 timers.c。1000 ms 換算後需大於 0 tick；排程器啟動後 Timer 才能運作。未在硬體編譯或執行此片段。",
+  "explanation": [
+    {"term": "pdTRUE", "text": "選擇 auto-reload，Timer 到期後會繼續計算下一個週期；pdFALSE 則是 one-shot。"},
+    {"term": "on_timeout()", "text": "這是一般函式形式的 callback，執行環境是 timer service task，不是硬體中斷處理函式。"},
+    {"term": "xTimerStart(timer, 0)", "text": "不等待命令佇列的空間。需要檢查回傳值；成功送出命令和 callback 已經執行，是不同的事情。"}
+  ],
+  "pitfalls": [
+    "不要在 callback 裡使用 vTaskDelay()，或讓 Queue 等操作採用非零阻塞時間。",
+    "即使不呼叫阻塞 API，一大段耗時運算也會拖延其他 callback。",
+    "軟體 Timer 不能直接當成精密硬體計時器；排程與其他工作都可能影響實際執行時間。"
+  ],
+  "check": {"question": "某個 callback 需要寫入大量檔案，能不能直接把整段寫檔工作放進去？", "answer": "不適合。寫檔可能耗時或阻塞，會占住共用的 timer service task。可以在 callback 裡用不阻塞的方式通知工作 Task，讓工作 Task 處理寫檔；通知失敗或佇列滿時也要有處理方式。"},
+  "sources": [
+    {"title": "FreeRTOS Kernel Book：Software Timer Management", "url": "https://github.com/FreeRTOS/FreeRTOS-Kernel-Book/blob/main/ch06.md", "used_for": "共用 timer service task、callback 限制與 one-shot／auto-reload。"},
+    {"title": "FreeRTOS API：xTimerStart", "url": "https://sjhop.freertos.org/FreeRTOS-timers-xTimerStart.html", "used_for": "啟動命令、回傳值與 timer command queue。"}
+  ]
+}

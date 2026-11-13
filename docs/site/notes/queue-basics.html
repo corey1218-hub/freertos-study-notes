@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Sender 放資料，Receiver 取資料。Queue 除了保存資料，也幫忙處理「現在還不能做」的等待。">
+  <meta name="theme-color" content="#172c3c">
+  <title>兩個 Task，怎麼把資料交給對方？ · FreeRTOS 學習筆記</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳至主要內容</a>
+  <header class="header"><div class="shell nav">
+    <a class="brand" href="../index.html" aria-label="FreeRTOS 學習筆記首頁"><span class="brand-mark">F<span>_</span></span><span>FreeRTOS<span class="brand-sub">學習筆記</span></span></a>
+    <nav aria-label="主要導覽"><a href="../index.html#notes">筆記</a><a href="../index.html#try">動手試試</a><a href="../rules.html">專案規則 <span aria-hidden="true">↗</span></a></nav>
+  </div></header>
+  <main id="main"><div class="shell article-shell"><div class="breadcrumb"><a href="../index.html#notes">全部筆記</a><span>/</span>Queue</div><header class="article-header"><p class="eyebrow">NOTE 02 <span class="sep">/</span> Queue</p><h1>兩個 Task，怎麼把資料交給對方？</h1><p class="article-summary">Sender 放資料，Receiver 取資料。Queue 除了保存資料，也幫忙處理「現在還不能做」的等待。</p><div class="article-meta">約 5 分鐘 <span>·</span> 更新 2026-11-13 <span>·</span> C 語言教學片段</div></header><div class="article-layout"><aside class="toc"><p>這一篇的重點</p><nav aria-label="文章目錄"><a href="#idea"><span>01</span> 一句話理解</a><a href="#flow"><span>02</span> 運作流程</a><a href="#code"><span>03</span> 程式片段</a><a href="#pitfalls"><span>04</span> 容易弄錯的地方</a><a href="#check"><span>05</span> 自我檢查</a><a href="#sources"><span>06</span> 參考資料</a></nav><a class="back-link" href="../index.html#notes">← 返回筆記一覽</a></aside><article class="article-body"><section id="idea"><h2>一句話理解</h2><p class="key-idea">把 Queue 想成有容量限制的收件匣；送進去的是資料副本，取出成功後該項目就離開佇列。</p></section><section id="flow"><h2>運作流程</h2><ol class="steps"><li><span class="step-number">01</span><div><h3>建立 Queue</h3><p>先決定最多放幾筆，以及每筆資料的大小。</p></div></li><li><span class="step-number">02</span><div><h3>Sender 傳送</h3><p>xQueueSend() 把資料複製到尾端；Queue 滿時，依等待時間決定等候或回報失敗。</p></div></li><li><span class="step-number">03</span><div><h3>Receiver 接收</h3><p>xQueueReceive() 取出最前面的資料。Queue 空時，可以等候資料或立即回報失敗。</p></div></li><li><span class="step-number">04</span><div><h3>確認操作結果</h3><p>檢查回傳值，成功後才使用接收資料；失敗也應有對應處理。</p></div></li></ol></section><section id="code"><h2>程式片段</h2><div class="code-window"><div class="code-bar"><span>C / 教學片段</span><button class="copy-code" type="button">複製程式碼</button></div><pre tabindex="0" aria-label="C 程式片段"><code>#include &lt;stdint.h&gt;
+#include &quot;FreeRTOS.h&quot;
+#include &quot;queue.h&quot;
+
+static QueueHandle_t values;
+
+BaseType_t init_queue(void)
+{
+    values = xQueueCreate(5, sizeof(int32_t));
+    return values != NULL ? pdPASS : pdFAIL;
+}
+
+/* 僅從 Task context 呼叫，且已確認初始化成功。 */
+BaseType_t send_value(int32_t value)
+{
+    return xQueueSend(values, &amp;value, 0);
+}
+
+BaseType_t receive_value(int32_t *out)
+{
+    return xQueueReceive(values, out, pdMS_TO_TICKS(100));
+}</code></pre></div><p class="code-note">教學片段，假設已啟用動態配置並提供 FreeRTOS heap。呼叫端必須先確認 init_queue() 成功；receive_value() 的 out 必須指向有效的 int32_t，且只有回傳 pdPASS 時才使用其內容。未包含 Task 建立及硬體輸出。</p><dl class="explanation"><div><dt><code>xQueueCreate(5, sizeof(int32_t))</code></dt><dd>最多保存 5 筆 int32_t。容量是筆數，每筆大小是位元組數。</dd></div><div><dt><code>xQueueSend(..., 0)</code></dt><dd>不等候空位。如果已滿就失敗，呼叫端可以記錄、稍後重試或依需求捨棄。</dd></div><div><dt><code>xQueueReceive(..., 100 ms)</code></dt><dd>最多等待約 100 ms 的 tick 數。有資料就取出，逾時則回報失敗；等待期間 Task 不會忙著空轉。</dd></div></dl></section><section id="pitfalls"><h2>容易弄錯的地方</h2><ul class="pitfalls"><li>Queue 複製的是設定的 item size。若放的是指標，只複製指標值，不會連指向的整塊資料一起複製。</li><li>傳送與接收都可能失敗，不能省略回傳值檢查。</li><li>ISR 不能直接使用這些 Task 版本；中斷情境要查閱對應的 FromISR API 與限制。</li></ul></section><section id="check" class="self-check"><p class="eyebrow">停一下，想想看</p><h2>自我檢查</h2><p>容量是 5 的 Queue 已經放滿，第 6 次呼叫 xQueueSend(..., 0) 會自動刪掉最舊的一筆嗎？</p><details><summary>看說明</summary><p>不會。這次傳送會失敗，原本的 5 筆資料保留。一般的 xQueueSend() 不會替你覆蓋舊資料，程式需要自己處理失敗。</p></details></section><section id="sources"><h2>參考資料</h2><p class="source-note">概念依官方文件整理，以下列出各來源用到的部分。</p><ul class="sources"><li><a href="https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/02-Queues-mutexes-and-semaphores/01-Queues" target="_blank" rel="noopener noreferrer">FreeRTOS：Queues ↗</a><p>FIFO、資料複製、滿／空時的阻塞，以及 ISR 介面限制。</p></li></ul></section><nav class="article-next" aria-label="前後篇筆記"><a href="task-delay.html"><small>上一篇</small><strong>Task 延遲時，CPU 在做什麼？</strong></a><a href="timer-callback.html"><small>下一篇</small><strong>Timer 的 callback，為什麼不能慢慢等？</strong></a></nav></article></div></div></main>
+  <footer class="footer"><div class="shell footer-inner"><span>FreeRTOS 學習筆記 <span class="muted">/ Corey</span></span><span>課堂小專案 · 2026 <span class="sep">/</span> <a href="../rules.html">AGENTS.md 與擴充方式</a></span></div></footer>
+</body>
+</html>

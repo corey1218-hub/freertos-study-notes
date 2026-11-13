@@ -1,0 +1,24 @@
+{
+  "slug": "new-note",
+  "order": 4,
+  "title": "請填寫：這篇要回答的問題",
+  "category": "同步",
+  "minutes": 4,
+  "updated": "2026-11-13",
+  "summary": "請填寫：首頁摘要",
+  "one_sentence": "請填寫：一句話說明",
+  "steps": [
+    {"title": "請填寫：步驟一", "text": "請填寫：原因與行為"},
+    {"title": "請填寫：步驟二", "text": "請填寫：原因與行為"},
+    {"title": "請填寫：步驟三", "text": "請填寫：原因與行為"}
+  ],
+  "code": "請填寫：C 教學片段",
+  "code_note": "請填寫：使用前提與省略設定",
+  "explanation": [
+    {"term": "請填寫：關鍵 API", "text": "請填寫：解釋"},
+    {"term": "請填寫：關鍵參數", "text": "請填寫：解釋"}
+  ],
+  "pitfalls": ["請填寫：常見錯誤一", "請填寫：常見錯誤二"],
+  "check": {"question": "請填寫：自我檢查問題", "answer": "請填寫：答案與原因"},
+  "sources": [{"title": "請填寫：官方來源名稱", "url": "https://www.freertos.org", "used_for": "請填寫：此來源支持哪個說明"}]
+}

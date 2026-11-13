@@ -1,0 +1,33 @@
+{
+  "slug": "task-delay",
+  "order": 1,
+  "title": "Task 延遲時，CPU 在做什麼？",
+  "category": "Task",
+  "minutes": 4,
+  "updated": "2026-11-13",
+  "summary": "看到 vTaskDelay()，先別把它想成整台機器暫停。停下來等的是目前這個 Task。",
+  "one_sentence": "Task 進入 Blocked 後會讓出 CPU，排程器才能安排其他可執行的 Task。",
+  "steps": [
+    {"title": "先做一次工作", "text": "Task 取得 CPU，執行迴圈中的工作。"},
+    {"title": "呼叫 vTaskDelay()", "text": "當延遲 tick 數大於 0，這個 Task 進入 Blocked，等待指定的 tick 數。"},
+    {"title": "其他 Task 有機會執行", "text": "排程器依設定與優先權選擇可執行的 Task；沒有其他應用 Task 就可能執行 Idle Task。"},
+    {"title": "時間到，回到 Ready", "text": "延遲結束只代表可以被排程；何時真的執行，還要看其他 Task 的狀態與優先權。"}
+  ],
+  "code": "#include \"FreeRTOS.h\"\n#include \"task.h\"\n\n/* do_work() 由應用程式提供。 */\nextern void do_work(void);\n\nvoid WorkerTask(void *parameters)\n{\n    (void) parameters;\n    for (;;) {\n        do_work();\n        vTaskDelay(pdMS_TO_TICKS(200));\n    }\n}",
+  "code_note": "教學片段，需放入已設定好的 FreeRTOS 專案，另外建立 WorkerTask、提供 do_work() 並啟動排程器。假設 200 ms 轉換後至少是 1 tick，且 INCLUDE_vTaskDelay 已啟用。這裡沒有進行硬體實測。",
+  "explanation": [
+    {"term": "for (;;)", "text": "Task 重複執行工作；迴圈裡的等待點，讓它不需要一直占用 CPU。"},
+    {"term": "pdMS_TO_TICKS(200)", "text": "把 200 毫秒換成系統使用的 tick 數；時間解析度受 tick 設定影響。"},
+    {"term": "vTaskDelay()", "text": "等待時間從呼叫當下計算，因此一輪間隔還包含 do_work() 的執行時間與排程延遲。"}
+  ],
+  "pitfalls": [
+    "Blocked 不等於整個系統停止。其他 Ready 的 Task 仍有機會執行。",
+    "vTaskDelay(200) 的單位是 tick，不能直接解讀成 200 毫秒。",
+    "延遲結束不代表立即取得 CPU；也不能把這個寫法當成精準的固定週期。"
+  ],
+  "check": {"question": "如果 do_work() 每次花 30 ms，接著再延遲 200 ms，兩次工作開始的間隔會固定是 200 ms 嗎？", "answer": "不會。除了等待的 200 ms，還有前一次工作的 30 ms，以及 tick 解析度與排程造成的影響。需要固定週期時，應再研究 xTaskDelayUntil()，並確認工作能在週期內完成。"},
+  "sources": [
+    {"title": "FreeRTOS API：vTaskDelay", "url": "https://freertos.org/Documentation/02-Kernel/04-API-references/02-Task-control/01-vTaskDelay", "used_for": "相對延遲、tick 單位與固定週期的差別。"},
+    {"title": "FreeRTOS Kernel：task.h", "url": "https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/include/task.h", "used_for": "Task API 與 xTaskDelayUntil() 的官方介面說明。"}
+  ]
+}

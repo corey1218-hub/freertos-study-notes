@@ -1,0 +1,32 @@
+{
+  "slug": "queue-basics",
+  "order": 2,
+  "title": "兩個 Task，怎麼把資料交給對方？",
+  "category": "Queue",
+  "minutes": 5,
+  "updated": "2026-11-13",
+  "summary": "Sender 放資料，Receiver 取資料。Queue 除了保存資料，也幫忙處理「現在還不能做」的等待。",
+  "one_sentence": "把 Queue 想成有容量限制的收件匣；送進去的是資料副本，取出成功後該項目就離開佇列。",
+  "steps": [
+    {"title": "建立 Queue", "text": "先決定最多放幾筆，以及每筆資料的大小。"},
+    {"title": "Sender 傳送", "text": "xQueueSend() 把資料複製到尾端；Queue 滿時，依等待時間決定等候或回報失敗。"},
+    {"title": "Receiver 接收", "text": "xQueueReceive() 取出最前面的資料。Queue 空時，可以等候資料或立即回報失敗。"},
+    {"title": "確認操作結果", "text": "檢查回傳值，成功後才使用接收資料；失敗也應有對應處理。"}
+  ],
+  "code": "#include <stdint.h>\n#include \"FreeRTOS.h\"\n#include \"queue.h\"\n\nstatic QueueHandle_t values;\n\nBaseType_t init_queue(void)\n{\n    values = xQueueCreate(5, sizeof(int32_t));\n    return values != NULL ? pdPASS : pdFAIL;\n}\n\n/* 僅從 Task context 呼叫，且已確認初始化成功。 */\nBaseType_t send_value(int32_t value)\n{\n    return xQueueSend(values, &value, 0);\n}\n\nBaseType_t receive_value(int32_t *out)\n{\n    return xQueueReceive(values, out, pdMS_TO_TICKS(100));\n}",
+  "code_note": "教學片段，假設已啟用動態配置並提供 FreeRTOS heap。呼叫端必須先確認 init_queue() 成功；receive_value() 的 out 必須指向有效的 int32_t，且只有回傳 pdPASS 時才使用其內容。未包含 Task 建立及硬體輸出。",
+  "explanation": [
+    {"term": "xQueueCreate(5, sizeof(int32_t))", "text": "最多保存 5 筆 int32_t。容量是筆數，每筆大小是位元組數。"},
+    {"term": "xQueueSend(..., 0)", "text": "不等候空位。如果已滿就失敗，呼叫端可以記錄、稍後重試或依需求捨棄。"},
+    {"term": "xQueueReceive(..., 100 ms)", "text": "最多等待約 100 ms 的 tick 數。有資料就取出，逾時則回報失敗；等待期間 Task 不會忙著空轉。"}
+  ],
+  "pitfalls": [
+    "Queue 複製的是設定的 item size。若放的是指標，只複製指標值，不會連指向的整塊資料一起複製。",
+    "傳送與接收都可能失敗，不能省略回傳值檢查。",
+    "ISR 不能直接使用這些 Task 版本；中斷情境要查閱對應的 FromISR API 與限制。"
+  ],
+  "check": {"question": "容量是 5 的 Queue 已經放滿，第 6 次呼叫 xQueueSend(..., 0) 會自動刪掉最舊的一筆嗎？", "answer": "不會。這次傳送會失敗，原本的 5 筆資料保留。一般的 xQueueSend() 不會替你覆蓋舊資料，程式需要自己處理失敗。"},
+  "sources": [
+    {"title": "FreeRTOS：Queues", "url": "https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/02-Queues-mutexes-and-semaphores/01-Queues", "used_for": "FIFO、資料複製、滿／空時的阻塞，以及 ISR 介面限制。"}
+  ]
+}

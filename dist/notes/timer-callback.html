@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="callback 是時間到後要做的事。它在共用的 timer service task 裡執行，不能把這個 Task 卡住。">
+  <meta name="theme-color" content="#172c3c">
+  <title>Timer 的 callback，為什麼不能慢慢等？ · FreeRTOS 學習筆記</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳至主要內容</a>
+  <header class="header"><div class="shell nav">
+    <a class="brand" href="../index.html" aria-label="FreeRTOS 學習筆記首頁"><span class="brand-mark">F<span>_</span></span><span>FreeRTOS<span class="brand-sub">學習筆記</span></span></a>
+    <nav aria-label="主要導覽"><a href="../index.html#notes">筆記</a><a href="../index.html#try">動手試試</a><a href="../rules.html">專案規則 <span aria-hidden="true">↗</span></a></nav>
+  </div></header>
+  <main id="main"><div class="shell article-shell"><div class="breadcrumb"><a href="../index.html#notes">全部筆記</a><span>/</span>Timer</div><header class="article-header"><p class="eyebrow">NOTE 03 <span class="sep">/</span> Timer</p><h1>Timer 的 callback，為什麼不能慢慢等？</h1><p class="article-summary">callback 是時間到後要做的事。它在共用的 timer service task 裡執行，不能把這個 Task 卡住。</p><div class="article-meta">約 4 分鐘 <span>·</span> 更新 2026-11-13 <span>·</span> C 語言教學片段</div></header><div class="article-layout"><aside class="toc"><p>這一篇的重點</p><nav aria-label="文章目錄"><a href="#idea"><span>01</span> 一句話理解</a><a href="#flow"><span>02</span> 運作流程</a><a href="#code"><span>03</span> 程式片段</a><a href="#pitfalls"><span>04</span> 容易弄錯的地方</a><a href="#check"><span>05</span> 自我檢查</a><a href="#sources"><span>06</span> 參考資料</a></nav><a class="back-link" href="../index.html#notes">← 返回筆記一覽</a></aside><article class="article-body"><section id="idea"><h2>一句話理解</h2><p class="key-idea">軟體 Timer 的 callback 要短、要快，而且不能進入 Blocked，因為其他 Timer 也要使用同一個 timer service task。</p></section><section id="flow"><h2>運作流程</h2><ol class="steps"><li><span class="step-number">01</span><div><h3>先建立 Timer</h3><p>xTimerCreate() 設定週期、是否重複，以及時間到後呼叫的函式；建立成功不代表已經開始計時。</p></div></li><li><span class="step-number">02</span><div><h3>送出啟動命令</h3><p>xTimerStart() 把命令送進 timer command queue。回傳 pdPASS 代表命令已成功送入。</p></div></li><li><span class="step-number">03</span><div><h3>由 timer service task 處理</h3><p>計時到期且服務 Task 得以執行時，呼叫 callback；實際執行時機仍受排程影響。</p></div></li><li><span class="step-number">04</span><div><h3>快速完成並返回</h3><p>callback 做少量工作後就返回。耗時處理應交給其他 Task，讓服務 Task 繼續處理 Timer。</p></div></li></ol></section><section id="code"><h2>程式片段</h2><div class="code-window"><div class="code-bar"><span>C / 教學片段</span><button class="copy-code" type="button">複製程式碼</button></div><pre tabindex="0" aria-label="C 程式片段"><code>#include &lt;stdint.h&gt;
+#include &quot;FreeRTOS.h&quot;
+#include &quot;timers.h&quot;
+
+extern void handle_init_error(void);
+
+/* 此計數器只由 timer service task 修改。 */
+static uint32_t callback_count = 0;
+
+static void on_timeout(TimerHandle_t timer)
+{
+    (void) timer;
+    callback_count++;
+    /* 不呼叫 vTaskDelay()，做完就返回。 */
+}
+
+/* 初始化片段：於排程器啟動前執行。 */
+void init_timer(void)
+{
+    TimerHandle_t timer = xTimerCreate(
+        &quot;sample&quot;, pdMS_TO_TICKS(1000),
+        pdTRUE, NULL, on_timeout);
+
+    if (timer == NULL) {
+        handle_init_error();
+        return;
+    }
+    if (xTimerStart(timer, 0) != pdPASS) {
+        handle_init_error();
+    }
+}</code></pre></div><p class="code-note">教學片段，handle_init_error() 須由應用程式宣告與提供，並負責停止初始化或進行復原。需啟用 configUSE_TIMERS、動態配置，設定 timer task 的優先權／堆疊／命令佇列容量並加入 timers.c。1000 ms 換算後需大於 0 tick；排程器啟動後 Timer 才能運作。未在硬體編譯或執行此片段。</p><dl class="explanation"><div><dt><code>pdTRUE</code></dt><dd>選擇 auto-reload，Timer 到期後會繼續計算下一個週期；pdFALSE 則是 one-shot。</dd></div><div><dt><code>on_timeout()</code></dt><dd>這是一般函式形式的 callback，執行環境是 timer service task，不是硬體中斷處理函式。</dd></div><div><dt><code>xTimerStart(timer, 0)</code></dt><dd>不等待命令佇列的空間。需要檢查回傳值；成功送出命令和 callback 已經執行，是不同的事情。</dd></div></dl></section><section id="pitfalls"><h2>容易弄錯的地方</h2><ul class="pitfalls"><li>不要在 callback 裡使用 vTaskDelay()，或讓 Queue 等操作採用非零阻塞時間。</li><li>即使不呼叫阻塞 API，一大段耗時運算也會拖延其他 callback。</li><li>軟體 Timer 不能直接當成精密硬體計時器；排程與其他工作都可能影響實際執行時間。</li></ul></section><section id="check" class="self-check"><p class="eyebrow">停一下，想想看</p><h2>自我檢查</h2><p>某個 callback 需要寫入大量檔案，能不能直接把整段寫檔工作放進去？</p><details><summary>看說明</summary><p>不適合。寫檔可能耗時或阻塞，會占住共用的 timer service task。可以在 callback 裡用不阻塞的方式通知工作 Task，讓工作 Task 處理寫檔；通知失敗或佇列滿時也要有處理方式。</p></details></section><section id="sources"><h2>參考資料</h2><p class="source-note">概念依官方文件整理，以下列出各來源用到的部分。</p><ul class="sources"><li><a href="https://github.com/FreeRTOS/FreeRTOS-Kernel-Book/blob/main/ch06.md" target="_blank" rel="noopener noreferrer">FreeRTOS Kernel Book：Software Timer Management ↗</a><p>共用 timer service task、callback 限制與 one-shot／auto-reload。</p></li><li><a href="https://sjhop.freertos.org/FreeRTOS-timers-xTimerStart.html" target="_blank" rel="noopener noreferrer">FreeRTOS API：xTimerStart ↗</a><p>啟動命令、回傳值與 timer command queue。</p></li></ul></section><nav class="article-next" aria-label="前後篇筆記"><a href="queue-basics.html"><small>上一篇</small><strong>兩個 Task，怎麼把資料交給對方？</strong></a><span></span></nav></article></div></div></main>
+  <footer class="footer"><div class="shell footer-inner"><span>FreeRTOS 學習筆記 <span class="muted">/ Corey</span></span><span>課堂小專案 · 2026 <span class="sep">/</span> <a href="../rules.html">AGENTS.md 與擴充方式</a></span></div></footer>
+</body>
+</html>

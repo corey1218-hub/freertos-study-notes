@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="看到 vTaskDelay()，先別把它想成整台機器暫停。停下來等的是目前這個 Task。">
+  <meta name="theme-color" content="#172c3c">
+  <title>Task 延遲時，CPU 在做什麼？ · FreeRTOS 學習筆記</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳至主要內容</a>
+  <header class="header"><div class="shell nav">
+    <a class="brand" href="../index.html" aria-label="FreeRTOS 學習筆記首頁"><span class="brand-mark">F<span>_</span></span><span>FreeRTOS<span class="brand-sub">學習筆記</span></span></a>
+    <nav aria-label="主要導覽"><a href="../index.html#notes">筆記</a><a href="../index.html#try">動手試試</a><a href="../rules.html">專案規則 <span aria-hidden="true">↗</span></a></nav>
+  </div></header>
+  <main id="main"><div class="shell article-shell"><div class="breadcrumb"><a href="../index.html#notes">全部筆記</a><span>/</span>Task</div><header class="article-header"><p class="eyebrow">NOTE 01 <span class="sep">/</span> Task</p><h1>Task 延遲時，CPU 在做什麼？</h1><p class="article-summary">看到 vTaskDelay()，先別把它想成整台機器暫停。停下來等的是目前這個 Task。</p><div class="article-meta">約 4 分鐘 <span>·</span> 更新 2026-11-13 <span>·</span> C 語言教學片段</div></header><div class="article-layout"><aside class="toc"><p>這一篇的重點</p><nav aria-label="文章目錄"><a href="#idea"><span>01</span> 一句話理解</a><a href="#flow"><span>02</span> 運作流程</a><a href="#code"><span>03</span> 程式片段</a><a href="#pitfalls"><span>04</span> 容易弄錯的地方</a><a href="#check"><span>05</span> 自我檢查</a><a href="#sources"><span>06</span> 參考資料</a></nav><a class="back-link" href="../index.html#notes">← 返回筆記一覽</a></aside><article class="article-body"><section id="idea"><h2>一句話理解</h2><p class="key-idea">Task 進入 Blocked 後會讓出 CPU，排程器才能安排其他可執行的 Task。</p></section><section id="flow"><h2>運作流程</h2><ol class="steps"><li><span class="step-number">01</span><div><h3>先做一次工作</h3><p>Task 取得 CPU，執行迴圈中的工作。</p></div></li><li><span class="step-number">02</span><div><h3>呼叫 vTaskDelay()</h3><p>當延遲 tick 數大於 0，這個 Task 進入 Blocked，等待指定的 tick 數。</p></div></li><li><span class="step-number">03</span><div><h3>其他 Task 有機會執行</h3><p>排程器依設定與優先權選擇可執行的 Task；沒有其他應用 Task 就可能執行 Idle Task。</p></div></li><li><span class="step-number">04</span><div><h3>時間到，回到 Ready</h3><p>延遲結束只代表可以被排程；何時真的執行，還要看其他 Task 的狀態與優先權。</p></div></li></ol></section><section id="code"><h2>程式片段</h2><div class="code-window"><div class="code-bar"><span>C / 教學片段</span><button class="copy-code" type="button">複製程式碼</button></div><pre tabindex="0" aria-label="C 程式片段"><code>#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+/* do_work() 由應用程式提供。 */
+extern void do_work(void);
+
+void WorkerTask(void *parameters)
+{
+    (void) parameters;
+    for (;;) {
+        do_work();
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}</code></pre></div><p class="code-note">教學片段，需放入已設定好的 FreeRTOS 專案，另外建立 WorkerTask、提供 do_work() 並啟動排程器。假設 200 ms 轉換後至少是 1 tick，且 INCLUDE_vTaskDelay 已啟用。這裡沒有進行硬體實測。</p><dl class="explanation"><div><dt><code>for (;;)</code></dt><dd>Task 重複執行工作；迴圈裡的等待點，讓它不需要一直占用 CPU。</dd></div><div><dt><code>pdMS_TO_TICKS(200)</code></dt><dd>把 200 毫秒換成系統使用的 tick 數；時間解析度受 tick 設定影響。</dd></div><div><dt><code>vTaskDelay()</code></dt><dd>等待時間從呼叫當下計算，因此一輪間隔還包含 do_work() 的執行時間與排程延遲。</dd></div></dl></section><section id="pitfalls"><h2>容易弄錯的地方</h2><ul class="pitfalls"><li>Blocked 不等於整個系統停止。其他 Ready 的 Task 仍有機會執行。</li><li>vTaskDelay(200) 的單位是 tick，不能直接解讀成 200 毫秒。</li><li>延遲結束不代表立即取得 CPU；也不能把這個寫法當成精準的固定週期。</li></ul></section><section id="check" class="self-check"><p class="eyebrow">停一下，想想看</p><h2>自我檢查</h2><p>如果 do_work() 每次花 30 ms，接著再延遲 200 ms，兩次工作開始的間隔會固定是 200 ms 嗎？</p><details><summary>看說明</summary><p>不會。除了等待的 200 ms，還有前一次工作的 30 ms，以及 tick 解析度與排程造成的影響。需要固定週期時，應再研究 xTaskDelayUntil()，並確認工作能在週期內完成。</p></details></section><section id="sources"><h2>參考資料</h2><p class="source-note">概念依官方文件整理，以下列出各來源用到的部分。</p><ul class="sources"><li><a href="https://freertos.org/Documentation/02-Kernel/04-API-references/02-Task-control/01-vTaskDelay" target="_blank" rel="noopener noreferrer">FreeRTOS API：vTaskDelay ↗</a><p>相對延遲、tick 單位與固定週期的差別。</p></li><li><a href="https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/include/task.h" target="_blank" rel="noopener noreferrer">FreeRTOS Kernel：task.h ↗</a><p>Task API 與 xTaskDelayUntil() 的官方介面說明。</p></li></ul></section><nav class="article-next" aria-label="前後篇筆記"><span></span><a href="queue-basics.html"><small>下一篇</small><strong>兩個 Task，怎麼把資料交給對方？</strong></a></nav></article></div></div></main>
+  <footer class="footer"><div class="shell footer-inner"><span>FreeRTOS 學習筆記 <span class="muted">/ Corey</span></span><span>課堂小專案 · 2026 <span class="sep">/</span> <a href="../rules.html">AGENTS.md 與擴充方式</a></span></div></footer>
+</body>
+</html>

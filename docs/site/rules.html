@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AGENTS.md 如何規範 FreeRTOS 筆記的新增、版型、來源與驗證。">
+  <meta name="theme-color" content="#172c3c">
+  <title>專案規則與擴充方式 · FreeRTOS 學習筆記</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳至主要內容</a>
+  <header class="header"><div class="shell nav">
+    <a class="brand" href="index.html" aria-label="FreeRTOS 學習筆記首頁"><span class="brand-mark">F<span>_</span></span><span>FreeRTOS<span class="brand-sub">學習筆記</span></span></a>
+    <nav aria-label="主要導覽"><a href="index.html#notes">筆記</a><a href="index.html#try">動手試試</a><a href="rules.html">專案規則 <span aria-hidden="true">↗</span></a></nav>
+  </div></header>
+  <main id="main"><div class="shell rules-page"><a class="text-link" href="index.html">← 回首頁</a><p class="eyebrow rule-eyebrow">第九週 / 專案型 AI Agent</p><h1>這個網站，<br>下一次要怎麼繼續做？</h1><p class="rules-lead">我把每篇筆記該有的內容、檔案放法和檢查步驟寫進 AGENTS.md。之後換一個主題，AI 先讀規則，就能沿用同一套做法。</p><div class="rule-facts"><div><span>內容</span><strong>每篇一個 JSON</strong><p>固定欄位，不把內容綁死在網頁裡。</p></div><div><span>版型</span><strong>所有頁面共用</strong><p>首頁清單、目錄和前後篇連結自動產生。</p></div><div><span>檢查</span><strong>發布前先建置</strong><p>缺欄位、重複排序、壞掉的站內連結都會報錯。</p></div></div><section class="extension"><p class="eyebrow">實際擴充示範</p><h2>從 2 篇，增加到 3 篇。</h2><p>先完成 Task 與 Queue 筆記，再依同一份規則新增 Timer 筆記。文章數、分類與前後篇連結由建置程式更新，沒有為第三篇另外寫一份 HTML。</p><ol><li>讀取 <code>AGENTS.md</code> 與現有筆記。</li><li>依 <code>templates/note.example.json</code> 欄位建立 <code>content/timer-callback.json</code>。</li><li>執行 <code>python3 scripts/build.py</code>。</li><li>檢查首頁的 Timer 分類及新增文章。</li></ol><a class="text-link" href="notes/timer-callback.html">查看依規則新增的 Timer 筆記 →</a></section><section class="prompt-block"><h2>下次可以這樣交辦</h2><p>先讀 AGENTS.md 與現有的 Queue 筆記，再新增一篇「Binary Semaphore 和 Mutex 有什麼差別？」。依範本填寫內容，查閱官方文件；維持既有版型，完成建置與頁面檢查後回報。不要直接修改 dist 裡的檔案。</p></section><div class="rules-heading"><h2>完整專案規則</h2><a class="button secondary" href="AGENTS.md" download>下載 AGENTS.md ↓</a></div><pre class="rules-source" tabindex="0"># FreeRTOS 學習筆記：專案規則
+
+## 1. 這個網站要解決什麼問題
+
+整理 FreeRTOS 入門觀念。讀者是會一點 C、剛開始接觸作業系統的學生。
+我希望看完一篇筆記後，能回答「這段程式在做什麼、什麼時候會等、結果為什麼這樣」。
+每篇只處理一個問題，不把所有 API 塞進同一頁。
+
+## 2. 寫作方式
+
+- 全站使用繁體中文，保留 Task、Queue、Timer、callback 等常見名稱。
+- 先用一句話解釋，再看流程和程式；不要先貼一大段定義。
+- 用短句說清楚原因。例如「Queue 滿了，而且等待時間是 0，所以這次傳送失敗。」
+- 不使用「全面提升」「強大功能」「賦能」「一站式」等宣傳用語。
+- 不編造實驗結果、上課心得或已在開發板驗證的紀錄。
+- 範例程式是教學片段，必須交代執行環境與省略的設定。示意流程與實測輸出要分開標示。
+
+## 3. 檔案位置
+
+| 路徑 | 用途 | 新增內容時怎麼處理 |
+| --- | --- | --- |
+| `content/*.json` | 每篇筆記的唯一內容來源 | 新增一個檔案 |
+| `templates/note.example.json` | 新筆記欄位範本 | 複製後填寫，不直接發布 |
+| `templates/base.html` | 所有頁面的共用外框 | 只在調整整站版型時修改 |
+| `assets/style.css` | 色彩、排版、手機樣式 | 不為單篇文章複製整份樣式 |
+| `assets/site.js` | 搜尋、篩選、程式碼複製、Queue 示意 | 互動功能集中維護 |
+| `scripts/build.py` | 檢查資料並產生完整網站 | 不加入針對單篇文章的硬編碼 |
+| `dist/` | 可部署網站 | 執行建置產生，不直接修改 |
+| `docs/` | 擴充示範、檢查紀錄及 GitHub Pages 發布目錄 | 紀錄如實更新；`docs/site/` 由 `scripts/prepare_pages.py` 產生 |
+
+檔名與 slug 使用小寫英文及連字號，例如 `task-delay.json`。一個 slug 對應 `dist/notes/task-delay.html`。不要使用空白、中文檔名或重複 slug。
+
+## 4. 每篇筆記必須有的欄位
+
+依照 `templates/note.example.json` 填寫：
+
+| 欄位 | 格式與要求 |
+| --- | --- |
+| `slug` | 小寫英文、數字、連字號，且與檔名相同 |
+| `order` | 正整數，不可與其他筆記重複；決定首頁與前後篇順序 |
+| `title` | 一個明確的學習問題 |
+| `category` | 只能是 `Task`、`Queue`、`Timer`、`同步` 四種之一 |
+| `minutes` | 預估閱讀分鐘，正整數；是閱讀估計，不是測量結果 |
+| `updated` | `YYYY-MM-DD`，實際更新日期 |
+| `summary` | 首頁摘要，1～2 句 |
+| `one_sentence` | 一句話解釋核心觀念 |
+| `steps` | 3～5 個流程，每個包含 `title`、`text` |
+| `code` | 原創、精簡的 C 教學片段；不可貼密碼或金鑰 |
+| `code_note` | 範例前提、需提供的函式及未包含的設定 |
+| `explanation` | 2～5 個解說，每個包含 `term`、`text` |
+| `pitfalls` | 2～4 個容易弄錯的地方 |
+| `check` | 一個自我檢查問題，包含 `question`、`answer`；不可只答是或否 |
+| `sources` | 至少一個已查閱的官方文件，包含 `title`、`url`、`used_for` |
+
+所有內容欄位使用純文字，不放 HTML。建置器會處理跳脫，避免破壞頁面。
+
+## 5. 頁面結構與視覺
+
+每篇固定順序：標題與摘要 → 一句話理解 → 運作流程 → 程式片段與解說 → 容易弄錯的地方 → 自我檢查 → 參考資料 → 前後篇連結。
+
+整體像一本整理過的工程筆記：米白背景、深藍文字、少量橘黃色重點。標題清楚，文章主要內文至少 16px；導覽、來源註記與程式碼可使用較小字級，程式碼使用等寬字。避免滿版動畫、裝飾性圖片及大量漸層。
+
+桌機使用文章目錄與主要內容雙欄；手機改為單欄。長程式碼可以在區塊內左右捲動，不得把整個頁面撐寬。按鈕要有文字、鍵盤焦點與足夠對比。
+
+## 6. AI 新增內容的固定步驟
+
+1. 先讀本檔與 `content/` 中至少一篇現有筆記，確認規則與欄位。
+2. 列出這次要說明的單一問題，查閱相關 FreeRTOS 官方文件。若無法查證，先標出不確定處，不自行補成事實。
+3. 複製 `templates/note.example.json`，填入所有欄位；檢查 slug 與 order 沒有重複。
+4. 只改必要的內容檔。若只是新增筆記，不要改共用版型或既有文章。
+5. 執行 `python3 scripts/build.py`。必須成功通過欄位、來源網址、排序與站內連結檢查。
+6. 開啟首頁及新增文章，確認搜尋找得到、分類正確、目錄能跳轉、前後篇連結正確、程式碼沒有撐出畫面。
+7. 記錄實際完成的檢查。未做的測試寫「未驗證」，不可寫成已通過。
+8. 回報新增／修改檔案、文章主題、資料來源與檢查結果。依使用者要求決定是否發布。
+
+## 7. 技術與內容界線
+
+- 使用 Python 標準函式庫建置，網站是 HTML、CSS、JavaScript；不需要 API key、資料庫或付費服務。
+- 使用相對路徑，必須能放在 GitHub Pages 的專案子路徑下。
+- 不直接覆寫 `dist/` 的文章來修內容，應修正 `content/` 再建置。
+- 不把課堂講義全文、私人信件、學號、帳密或未授權圖片放進公開專案。
+- Queue 互動只示範容量 5、FIFO、等待時間 0 的行為；不能描述成真正的 FreeRTOS 核心模擬器。
+- 不把 callback 說成 ISR；不要在 timer callback 範例中放會阻塞的操作。
+- 不承諾 Task 在延遲結束的瞬間一定執行；應區分 Ready 與 Running。
+- 程式示例若未編譯或執行，維持「教學片段」標示，不宣稱可直接燒錄。
+
+## 8. 完成條件
+
+- 首頁與所有文章正常產生，沒有空欄位或範本占位文字。
+- 所有文章都有固定章節、原創說明及官方參考來源。
+- 首頁清單、搜尋資料、分類計數與前後篇連結由內容自動產生。
+- `AGENTS.md`、原始內容、版型、建置程式與網頁成果均保留在專案中。
+- 擴充紀錄至少展示一次：只新增內容檔，就能多出一篇符合格式的文章。
+</pre><p class="fine-print">這是使用 AI 協作建立的課堂專案。頁面內容、建置規則與檢查方式都保留在原始碼中；C 範例為教學片段，未宣稱完成硬體驗證。</p></div></main>
+  <footer class="footer"><div class="shell footer-inner"><span>FreeRTOS 學習筆記 <span class="muted">/ Corey</span></span><span>課堂小專案 · 2026 <span class="sep">/</span> <a href="rules.html">AGENTS.md 與擴充方式</a></span></div></footer>
+</body>
+</html>
